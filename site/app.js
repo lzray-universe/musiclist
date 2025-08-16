@@ -68,8 +68,9 @@ btnTheme?.addEventListener('click', ()=>{
 });
 
 // color modal
-btnColors?.addEventListener('click', ()=>{ modal.style.display='flex'; });
+btnColors?.addEventListener('click', ()=>{ modal?.style.display='flex'; });
 btnClose?.addEventListener('click', ()=>{
+  if(!modal) return;
   modal.style.display='none';
   const colors = {
     accent: cAccent.value,
@@ -128,19 +129,19 @@ function groupByPath(tracks){
 }
 
 function pickBestSource(sources){
-  // Prefer original if playable, then AAC, then MP3
+  // Prefer AAC/MP3 fallbacks; only use FLAC if browser supports it
   const can = (mime)=> audio.canPlayType(mime) !== '';
   const order = [
-    (s)=> s.mime.includes('flac') && can('audio/flac'),
     (s)=> s.mime.includes('mp4') && can('audio/mp4'),
     (s)=> s.mime.includes('mpeg') && can('audio/mpeg'),
+    (s)=> s.mime.includes('flac') && can('audio/flac'),
     (s)=> can(s.mime)
   ];
   for(const test of order){
     const found = sources.find(test);
     if(found) return found.url;
   }
-  return sources[0]?.url;
+  return null;
 }
 
 function buildList(tracks){
@@ -276,15 +277,20 @@ async function load(){
 }
 
 function playIndex(idx, autoplay=true){
-  queue = filteredTracks;
+  queue = filteredTracks.slice();
   currentIndex = idx;
   const tr = queue[idx];
   const url = pickBestSource(tr.sources);
-  audio.src = url;
+  if(!url){
+    console.warn('No playable source for', tr);
+    return next();
+  }
+  audio.src = encodeURI(url);
+  audio.load();
   npTitle.textContent = tr.title || '—';
   npArtist.textContent = tr.artist || tr.album || tr.groupPath || '—';
 
-  document.querySelectorAll('.row').forEach((el,i)=>{
+  listEl.querySelectorAll('.row').forEach((el,i)=>{
     el.classList.toggle('active', i===idx);
   });
 
@@ -425,6 +431,7 @@ btnPrev.addEventListener('click', prev);
 audio.addEventListener('play', ()=>{ btnPlay.textContent='⏸'; });
 audio.addEventListener('pause', ()=>{ btnPlay.textContent='▶️'; });
 audio.addEventListener('ended', ()=> next());
+audio.addEventListener('error', ()=> next());
 
 searchEl.addEventListener('input', filterTracks);
 window.addEventListener('keydown', (e)=>{
