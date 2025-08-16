@@ -1,0 +1,8 @@
+{
+  "publish": {
+    "originals": true,
+    "encodeLossless": true,
+    "aacBitrate": "192k",
+    "mp3Bitrate": "256k"
+  }
+}
