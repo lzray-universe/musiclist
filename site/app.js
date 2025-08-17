@@ -8,18 +8,19 @@ const cAccent = document.getElementById('c-accent');
 const cStop1 = document.getElementById('c-stop1');
 const cStop2 = document.getElementById('c-stop2');
 const cRing = document.getElementById('c-ring');
+const ASSET_BASE = new URL('.', document.currentScript?.src || location.href);
 
 async function applyConfig(){
   try{
     let cfg = {};
-try {
-  const base = new URL('.', document.currentScript.src);      
-  const url  = new URL('config.json', base);
-  const res  = await fetch(url.toString() + '?ts=' + Date.now(), { cache: 'no-store' });
-  if (res.ok) cfg = await res.json();
-} catch (e) {
-
-}
+    try {
+      const url = new URL('config.json', ASSET_BASE);
+      url.searchParams.set('ts', Date.now());
+      const res = await fetch(url.toString(), { cache: 'no-store' });
+      if (res.ok) cfg = await res.json();
+    } catch (e) {
+      // ignore missing config
+    }
     const themePref = localStorage.getItem('player.theme') || cfg.defaultTheme || 'auto';
     setTheme(themePref);
     const saved = JSON.parse(localStorage.getItem('player.colors')||'null');
@@ -271,7 +272,9 @@ function filterTracks(){
 
 async function load(){
   await applyConfig();
-  const res = await fetch('./index.json?ts=' + Date.now());
+  const idxUrl = new URL('index.json', ASSET_BASE);
+  idxUrl.searchParams.set('ts', Date.now());
+  const res = await fetch(idxUrl.toString());
   const data = await res.json();
   allTracks = data.tracks || [];
   filteredTracks = allTracks.slice();
@@ -296,7 +299,7 @@ function playIndex(idx, autoplay=true){
   currentIndex = idx;
   const tr = queue[idx];
   const url = pickBestSource(tr.sources);
-  audio.src = url;
+  audio.src = new URL(url, ASSET_BASE).toString();
   npTitle.textContent = tr.title || '—';
   npArtist.textContent = tr.artist || tr.album || tr.groupPath || '—';
 

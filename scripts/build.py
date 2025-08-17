@@ -115,6 +115,8 @@ def main():
     shutil.copy2(SITE_DIR / "index.html", DIST_DIR / "index.html")
     shutil.copy2(SITE_DIR / "style.css", DIST_DIR / "style.css")
     shutil.copy2(SITE_DIR / "app.js", DIST_DIR / "app.js")
+    if (SITE_DIR / "config.json").exists():
+        shutil.copy2(SITE_DIR / "config.json", DIST_DIR / "config.json")
 
     tracks = []
     for p in MUSIC_DIR.rglob("*"):
