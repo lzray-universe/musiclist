@@ -1,4 +1,3 @@
-
 // --- Theme & Color Config ---
 const modal = document.getElementById('modal');
 const btnTheme = document.getElementById('btn-theme');
@@ -12,14 +11,19 @@ const cRing = document.getElementById('c-ring');
 async function applyConfig(){
   try{
     const res = await fetch('./config.json?ts='+Date.now());
-    const cfg = await res.json();
-    const themePref = localStorage.getItem('player.theme') || cfg.defaultTheme || 'auto';
-    setTheme(themePref);
-    const saved = JSON.parse(localStorage.getItem('player.colors')||'null');
-    const colors = saved || cfg.viz || {};
-    setColors(colors);
+    if(res.ok){
+      const cfg = await res.json();
+      const themePref = localStorage.getItem('player.theme') || cfg.defaultTheme || 'auto';
+      setTheme(themePref);
+      const saved = JSON.parse(localStorage.getItem('player.colors')||'null');
+      const colors = saved || cfg.viz || {};
+      setColors(colors);
+      if(cfg.accent) document.documentElement.style.setProperty('--accent', cfg.accent);
+    }else{
+      setTheme(localStorage.getItem('player.theme') || 'auto');
+    }
   }catch(e){
-    setTheme('auto');
+    setTheme(localStorage.getItem('player.theme') || 'auto');
   }
 }
 
@@ -28,9 +32,6 @@ function setTheme(mode){
   b.classList.remove('theme-dark','theme-light');
   if(mode==='dark') b.classList.add('theme-dark');
   else if(mode==='light') b.classList.add('theme-light');
-  else{
-    // auto: do nothing; CSS prefers-color-scheme applies
-  }
   localStorage.setItem('player.theme', mode);
 }
 
@@ -50,45 +51,12 @@ function setColors(colors){
 }
 
 function rgbToHex(rgb){
-  // handle " #abc " or " rgb(100, 100, 100)"
   rgb = rgb.trim();
   if(rgb.startsWith('#')) return rgb;
   const m = rgb.match(/(\d+),\s*(\d+),\s*(\d+)/);
   if(!m) return '#6ea8fe';
   const toHex = (n)=> ('0'+parseInt(n,10).toString(16)).slice(-2);
   return '#' + toHex(m[1]) + toHex(m[2]) + toHex(m[3]);
-}
-
-// theme toggle
-btnTheme?.addEventListener('click', ()=>{
-  const cur = localStorage.getItem('player.theme') || 'auto';
-  const next = cur==='auto' ? 'dark' : (cur==='dark' ? 'light' : 'auto');
-  setTheme(next);
-  btnTheme.textContent = next==='dark' ? '🌘 暗色' : next==='light' ? '🌖 亮色' : '🌗 自动';
-});
-
-// color modal
-btnColors?.addEventListener('click', ()=>{ modal?.style.display='flex'; });
-btnClose?.addEventListener('click', ()=>{
-  if(!modal) return;
-  modal.style.display='none';
-  const colors = {
-    accent: cAccent.value,
-    bars: { stop1: cStop1.value, stop2: cStop2.value },
-    ring: cRing.value
-  };
-  localStorage.setItem('player.colors', JSON.stringify(colors));
-  setColors(colors);
-});
-modal?.addEventListener('click', (e)=>{
-  if(e.target===modal) modal.style.display='none';
-});
-
-
-function showMessage(msg){
-  if(listEl){
-    listEl.innerHTML = '<div class="row"><div class="t">'+msg+'</div><div></div><div></div></div>';
-  }
 }
 
 // Simple SPA music player with WebAudio visualizer
@@ -136,20 +104,18 @@ function groupByPath(tracks){
 }
 
 function pickBestSource(sources){
-  if(!Array.isArray(sources)||sources.length===0) return null;
-  // Prefer AAC/MP3 fallbacks; only use FLAC if browser supports it
   const can = (mime)=> audio.canPlayType(mime) !== '';
   const order = [
-    (s)=> s.mime.includes('mp4') && can('audio/mp4'),
-    (s)=> s.mime.includes('mpeg') && can('audio/mpeg'),
-    (s)=> s.mime.includes('flac') && can('audio/flac'),
-    (s)=> can(s.mime)
+    (s)=> s.mime?.includes('mp4') && can('audio/mp4'),
+    (s)=> s.mime?.includes('mpeg') && can('audio/mpeg'),
+    (s)=> s.mime?.includes('flac') && can('audio/flac'),
+    (s)=> s.mime && can(s.mime)
   ];
   for(const test of order){
     const found = sources.find(test);
     if(found) return found.url;
   }
-  return null;
+  return sources[0]?.url || "";
 }
 
 function buildList(tracks){
@@ -173,9 +139,7 @@ function buildList(tracks){
     row.appendChild(right);
     row.appendChild(dur);
 
-    row.addEventListener('click', ()=> {
-      playIndex(idx);
-    });
+    row.addEventListener('click', ()=> playIndex(idx));
 
     listEl.appendChild(row);
   });
@@ -226,7 +190,6 @@ function buildTree(node, path=[], container=treeEl){
     addGroup(name, obj, []);
   }
 
-  // root-level tracks
   if(node.__list__){
     const div = document.createElement('div');
     div.className = 'children';
@@ -264,22 +227,25 @@ function filterTracks(){
 
 async function load(){
   await applyConfig();
-  let data;
+
+  let data = {tracks:[]};
   try{
     const res = await fetch('./index.json?ts=' + Date.now());
-    if(!res.ok) throw new Error('index.json not found');
-    data = await res.json();
-  }catch(err){
-    console.error('Failed to load index.json', err);
-    showMessage('未找到播放列表。请确保仓库含有 music/ 并且 GitHub Actions 已生成 index.json');
-    return;
+    if(res.ok){
+      data = await res.json();
+    } else {
+      console.warn('index.json not found or invalid status', res.status);
+    }
+  }catch(e){
+    console.warn('Failed to load index.json', e);
   }
+
   allTracks = data.tracks || [];
   filteredTracks = allTracks.slice();
   buildList(filteredTracks);
 
-  treeData = groupByPath(allTracks);
-  buildTree(treeData);
+  const tree = groupByPath(allTracks);
+  buildTree(tree);
 
   const saved = JSON.parse(localStorage.getItem('player.state') || '{}');
   if(saved.id){
@@ -293,24 +259,16 @@ async function load(){
 }
 
 function playIndex(idx, autoplay=true){
-  queue = filteredTracks.slice();
+  queue = filteredTracks;
   currentIndex = idx;
   const tr = queue[idx];
-  const url = pickBestSource(tr.sources);
-  if(!url){
-    console.warn('No playable source for', tr);
-    const hasOnlyFlac = Array.isArray(tr.sources) && tr.sources.length>0 && tr.sources.every(s=>/flac/.test(s.mime));
-    if(hasOnlyFlac && audio && audio.canPlayType('audio/flac')===''){
-      showMessage('此浏览器不支持 FLAC 播放。请在仓库启用有损转码（MP3/AAC）或使用支持 FLAC 的浏览器。');
-    }
-    return next();
-  }
-  audio.src = encodeURI(url);
-  audio.load();
+  const url = pickBestSource(tr.sources || []);
+  if(!url){ console.warn('No playable source'); return; }
+  audio.src = url;
   npTitle.textContent = tr.title || '—';
   npArtist.textContent = tr.artist || tr.album || tr.groupPath || '—';
 
-  listEl.querySelectorAll('.row').forEach((el,i)=>{
+  document.querySelectorAll('.row').forEach((el,i)=>{
     el.classList.toggle('active', i===idx);
   });
 
@@ -351,7 +309,6 @@ function draw(){
   const dataArray = new Uint8Array(bufferLen);
   analyser.getByteFrequencyData(dataArray);
 
-  // Gradient
   const grad = cx.createLinearGradient(0,0,0,h);
   const stop1 = getComputedStyle(document.documentElement).getPropertyValue('--viz-stop1').trim()||'#9ec5ff';
   const stop2 = getComputedStyle(document.documentElement).getPropertyValue('--viz-stop2').trim()||'#6ea8fe';
@@ -359,7 +316,6 @@ function draw(){
   grad.addColorStop(1, stop2);
   cx.fillStyle = grad;
 
-  // Bars
   const bars = Math.min(96, bufferLen);
   const step = Math.floor(bufferLen / bars);
   const bw = Math.max(2, w/(bars*1.2));
@@ -374,17 +330,16 @@ function draw(){
     cx.fillRect(x,y,bw,bh);
   }
 
-  // Radial ring
   const avg = dataArray.reduce((a,b)=>a+b,0)/dataArray.length/255;
   const cxm = w-120, cym = 120;
   const r = 60 + avg*26;
+  const ring = getComputedStyle(document.documentElement).getPropertyValue('--viz-ring').trim()||'#9ec5ff';
   cx.beginPath();
   cx.arc(cxm, cym, r, 0, Math.PI*2);
-  const ring = getComputedStyle(document.documentElement).getPropertyValue('--viz-ring').trim()||'#9ec5ff';
   cx.strokeStyle = ring;
   cx.lineWidth = 6;
   cx.shadowBlur = 22;
-  cx.shadowColor = 'rgba(158,197,255,0.8)';
+  cx.shadowColor = ring;
   cx.stroke();
 
   rafId = requestAnimationFrame(draw);
@@ -412,12 +367,8 @@ function updateMediaSession(tr){
   }
 }
 
-function next(){
-  if(currentIndex < queue.length-1) playIndex(currentIndex+1);
-}
-function prev(){
-  if(currentIndex > 0) playIndex(currentIndex-1);
-}
+function next(){ if(currentIndex < queue.length-1) playIndex(currentIndex+1); }
+function prev(){ if(currentIndex > 0) playIndex(currentIndex-1); }
 
 audio.addEventListener('timeupdate', ()=>{
   if(audio.duration){
@@ -431,9 +382,7 @@ seek.addEventListener('input', ()=>{
     audio.currentTime = (seek.value/1000)*audio.duration;
   }
 });
-vol.addEventListener('input', ()=>{
-  audio.volume = parseFloat(vol.value);
-});
+vol.addEventListener('input', ()=>{ audio.volume = parseFloat(vol.value); });
 
 btnPlay.addEventListener('click', async ()=>{
   if(!ctx) ensureAudioGraph();
@@ -451,7 +400,23 @@ btnPrev.addEventListener('click', prev);
 audio.addEventListener('play', ()=>{ btnPlay.textContent='⏸'; });
 audio.addEventListener('pause', ()=>{ btnPlay.textContent='▶️'; });
 audio.addEventListener('ended', ()=> next());
-audio.addEventListener('error', ()=> next());
+
+// try next source on decode/network error
+audio.addEventListener('error', ()=>{
+  const tr = queue[currentIndex];
+  if(!tr) return;
+  const s = (tr.sources || []).slice();
+  if(s.length > 1){
+    tr.sources = s.slice(1).concat(s[0]);
+    const nextUrl = pickBestSource(tr.sources || []);
+    if(nextUrl && nextUrl !== audio.src){
+      audio.src = nextUrl;
+      audio.play().catch(()=>{});
+      return;
+    }
+  }
+  console.warn('All sources failed for track:', tr?.title);
+});
 
 searchEl.addEventListener('input', filterTracks);
 window.addEventListener('keydown', (e)=>{

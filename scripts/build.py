@@ -5,137 +5,155 @@ import shutil
 import subprocess
 from pathlib import Path
 from datetime import datetime
-import hashlib
 
 ROOT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = ROOT / "music"
 SITE_DIR = ROOT / "site"
 DIST_DIR = ROOT / "dist"
 
-AUDIO_EXTS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
-MIME = {
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".flac": "audio/flac",
-    ".m4a": "audio/mp4",
-    ".aac": "audio/aac",
-    ".ogg": "audio/ogg",
-}
-
+AUDIO_EXTS = {".mp3", ".wav", ".flac"}
 CONFIG = json.load(open(ROOT / 'config.json', 'r', encoding='utf-8')) if (ROOT / 'config.json').exists() else {}
-PUB = CONFIG.get('publish', {
-    "originals": True,
-    "encodeLossless": True,
-    "aacBitrate": "192k",
-    "mp3Bitrate": "256k"
-})
+PUB = CONFIG.get('publish', {})
+PUBLISH_ORIGINALS = PUB.get('originals', True)
+ENCODE_LOSSLESS = PUB.get('encodeLossless', True)
+AAC_BR = PUB.get('aacBitrate', '192k')
+MP3_BR = PUB.get('mp3Bitrate', '256k')
 
-def has_ffmpeg():
+def ffprobe_info(path: Path):
     try:
-        subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration:format_tags=artist,title,album",
+            "-of", "json",
+            str(path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(res.stdout or "{}")
+        dur = None
+        artist = ""
+        title = ""
+        album = ""
+        if "format" in data:
+            fmt = data["format"]
+            if "duration" in fmt:
+                try:
+                    dur = float(fmt["duration"])
+                except:
+                    dur = None
+            tags = fmt.get("tags", {}) or {}
+            artist = tags.get("artist") or tags.get("ARTIST") or ""
+            title  = tags.get("title") or tags.get("TITLE") or ""
+            album  = tags.get("album") or tags.get("ALBUM") or ""
+        return dur, artist, title, album
     except Exception:
-        return False
+        return None, "", "", ""
 
-def sha1(s: str) -> str:
-    return hashlib.sha1(s.encode('utf-8')).hexdigest()[:12]
+def transcode_if_needed(src: Path):
+    outputs = []
+    ext = src.suffix.lower()
+    if ext not in [".wav", ".flac"]:
+        return outputs
+    # mirror structure under dist/audio/enc/
+    rel_no_ext = src.relative_to(ROOT).with_suffix("")
+    enc_dir = DIST_DIR / "audio" / "enc" / rel_no_ext.parent
+    enc_dir.mkdir(parents=True, exist_ok=True)
 
-def copy_site():
-    DIST_DIR.mkdir(parents=True, exist_ok=True)
-    for name in ["index.html", "style.css", "app.js", "config.json"]:
-        src = SITE_DIR / name
-        if src.exists():
-            shutil.copy2(src, DIST_DIR / name)
+    # AAC (m4a)
+    m4a_path = enc_dir / (rel_no_ext.name + ".m4a")
+    cmd_aac = [
+        "ffmpeg", "-y", "-i", str(src),
+        "-vn",
+        "-c:a", "aac", "-b:a", str(AAC_BR),
+        "-movflags", "+faststart",
+        "-map_metadata", "0",
+        str(m4a_path)
+    ]
+    subprocess.run(cmd_aac, check=True)
+    outputs.append(("audio/mp4", str(m4a_path.relative_to(DIST_DIR)).replace("\\", "/")))
 
-def rel_from_music(p: Path) -> Path:
-    return p.relative_to(MUSIC_DIR)
+    # MP3
+    mp3_path = enc_dir / (rel_no_ext.name + ".mp3")
+    cmd_mp3 = [
+        "ffmpeg", "-y", "-i", str(src),
+        "-vn",
+        "-c:a", "libmp3lame", "-b:a", str(MP3_BR),
+        "-map_metadata", "0",
+        str(mp3_path)
+    ]
+    subprocess.run(cmd_mp3, check=True)
+    outputs.append(("audio/mpeg", str(mp3_path.relative_to(DIST_DIR)).replace("\\", "/")))
+
+    return outputs
 
 def copy_original(src: Path):
-    rel = rel_from_music(src)
+    rel = src.relative_to(ROOT / "music")
     dst = DIST_DIR / "audio" / "raw" / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
-    return (str(Path("audio/raw") / rel).replace("\\", "/"), MIME.get(src.suffix.lower(), "application/octet-stream"))
+    mime = {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".flac": "audio/flac",
+    }.get(src.suffix.lower(), "application/octet-stream")
+    return mime, str(dst.relative_to(DIST_DIR)).replace("\\", "/")
 
-def transcode(src: Path, ext: str, bitrate: str):
-    """Transcode src (wav/flac) into ext ('.mp3' or '.m4a') with ffmpeg."""
-    rel = rel_from_music(src).with_suffix(ext)
-    out = DIST_DIR / "audio" / ext.strip(".") / rel
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    if ext == ".mp3":
-        cmd = ["ffmpeg", "-y", "-i", str(src), "-vn", "-b:a", bitrate, str(out)]
-    elif ext == ".m4a":
-        # AAC in MP4 container
-        cmd = ["ffmpeg", "-y", "-i", str(src), "-vn", "-c:a", "aac", "-b:a", bitrate, "-movflags", "+faststart", str(out)]
-    else:
-        raise ValueError("Unsupported transcode ext")
-
-    subprocess.run(cmd, check=True)
-    return (str(Path("audio") / ext.strip(".") / rel).replace("\\", "/"), MIME[ext])
-
-def gather_tracks():
-    tracks = []
-    use_ffmpeg = has_ffmpeg() and PUB.get("encodeLossless", True)
-    for p in MUSIC_DIR.rglob("*"):
-        if not p.is_file() or p.suffix.lower() not in AUDIO_EXTS:
-            continue
-        rel = rel_from_music(p)
-        groupPath = str(rel.parent).replace("\\", "/")
-        title = p.stem
-        track_id = sha1(str(rel))
-
-        sources = []
-        # Prefer encoded formats; keep originals if requested
-        if p.suffix.lower() in [".wav", ".flac"] and use_ffmpeg:
-            # Make both m4a (AAC) and mp3 for max compatibility
-            try:
-                m4a_url, m4a_mime = transcode(p, ".m4a", PUB.get("aacBitrate", "192k"))
-                sources.append({"url": m4a_url, "mime": m4a_mime})
-            except Exception as e:
-                print(f"[warn] AAC transcode failed for {rel}: {e}")
-            try:
-                mp3_url, mp3_mime = transcode(p, ".mp3", PUB.get("mp3Bitrate", "256k"))
-                sources.append({"url": mp3_url, "mime": mp3_mime})
-            except Exception as e:
-                print(f"[warn] MP3 transcode failed for {rel}: {e}")
-        # Always include originals if enabled
-        if PUB.get("originals", True):
-            url, mime = copy_original(p)
-            sources.append({"url": url, "mime": mime})
-
-        # For already-compressed formats, just copy originals (in case originals=False was set)
-        if p.suffix.lower() in [".mp3", ".m4a", ".aac", ".ogg"] and not sources:
-            url, mime = copy_original(p)
-            sources.append({"url": url, "mime": mime})
-
-        track = {
-            "id": track_id,
-            "title": title,
-            "artist": "",
-            "album": "",
-            "duration": 0,
-            "groupPath": groupPath if groupPath != "." else "",
-            "sources": sources,
-        }
-        tracks.append(track)
-    # Sort tracks by path then title
-    tracks.sort(key=lambda t: (t["groupPath"], t["title"]))
-    return tracks
-
-def build():
+def main():
     if DIST_DIR.exists():
         shutil.rmtree(DIST_DIR)
     DIST_DIR.mkdir(parents=True, exist_ok=True)
-    copy_site()
-    tracks = gather_tracks()
+
+    # Copy static site
+    shutil.copy2(SITE_DIR / "index.html", DIST_DIR / "index.html")
+    shutil.copy2(SITE_DIR / "style.css", DIST_DIR / "style.css")
+    shutil.copy2(SITE_DIR / "app.js", DIST_DIR / "app.js")
+    # Optional site/config.json
+    if (SITE_DIR / "config.json").exists():
+        shutil.copy2(SITE_DIR / "config.json", DIST_DIR / "config.json")
+
+    tracks = []
+    for p in MUSIC_DIR.rglob("*"):
+        if p.is_file() and p.suffix.lower() in AUDIO_EXTS:
+            dur, artist, title, album = ffprobe_info(p)
+            if not title:
+                title = p.stem
+            group_path = str(p.relative_to(MUSIC_DIR).parent).replace("\\", "/")
+            if group_path == ".":
+                group_path = ""
+
+            mime_orig, rel_orig = (None, None)
+            if PUBLISH_ORIGINALS:
+                mime_orig, rel_orig = copy_original(p)
+
+            fallbacks = transcode_if_needed(p) if ENCODE_LOSSLESS else []
+
+            # Prefer AAC/MP3 first to avoid FLAC compatibility issues
+            sources = []
+            for m, u in fallbacks:
+                sources.append({"mime": m, "url": u})
+            if PUBLISH_ORIGINALS and mime_orig and rel_orig:
+                sources.append({"mime": mime_orig, "url": rel_orig})
+
+            track = {
+                "id": len(tracks) + 1,
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "duration": dur,
+                "groupPath": group_path,
+                "sources": sources,
+                "originalExt": p.suffix.lower(),
+            }
+            tracks.append(track)
+
     out = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "tracks": tracks,
     }
     with open(DIST_DIR / "index.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
+
     print(f"Built {len(tracks)} tracks → {DIST_DIR}")
 
 if __name__ == "__main__":
-    build()
+    main()

@@ -1,16 +1,17 @@
-# Music Player (GitHub Pages)
+# GitHub Actions Music Playlist (MP3/WAV/FLAC) + Visualizer + Themes
 
-This repo builds a static music player site from the `music/` folder.
+- 支持 `music/` 下任意子文件夹分组
+- 自动生成 `index.json`（`ffprobe` 读取标题/艺人/专辑/时长）
+- 对 WAV/FLAC 自动转码为 `m4a`(AAC) + `mp3` 作为网页回退（可关闭/改码率）
+- 单页播放器，玻璃态 UI，WebAudio 频谱（柱状+环形），Media Session，主题/颜色可配置
+- **默认 `preload="none"`**：不预取音频，点击才加载，适合大库
 
-## How it works
-- `scripts/build.py` scans `music/` recursively.
-- It copies originals to `dist/audio/raw/...`.
-- If `ffmpeg` is available and `publish.encodeLossless=true` in `config.json`, it transcodes WAV/FLAC to MP3 (`mp3Bitrate`) and M4A/AAC (`aacBitrate`) and prefers those when playing.
-- It writes `dist/index.json` and copies `site/*` (including `config.json`) into `dist/`, then deploys to GitHub Pages.
+## 快速开始
+1. 新建 GitHub 仓库，上传全部文件。
+2. Settings → Pages → Build and deployment → Source 选 **GitHub Actions**。
+3. 把歌放进 `music/`（可子文件夹分组），提交推送。
 
-## Configure
-Edit the root `config.json`:
-
+## 构建配置 `config.json`（仓库根目录）
 ```json
 {
   "publish": {
@@ -21,15 +22,21 @@ Edit the root `config.json`:
   }
 }
 ```
+- 只想发小体积：把 `originals` 设为 `false`。
+- 下调码率可进一步减小体积。
 
-Customize the UI theme in `site/config.json`.
+## 站点外观 `site/config.json`
+```json
+{
+  "defaultTheme": "auto",
+  "accent": "#6ea8fe",
+  "viz": {
+    "bars": { "stop1": "#9ec5ff", "stop2": "#6ea8fe" },
+    "ring": "#9ec5ff"
+  }
+}
+```
+网页里也有 **🌗 主题**、**🎨 颜色** 的按钮，改动会存入 `localStorage`。
 
-## Usage
-1. Put your audio files into `music/` (you can nest folders to create groups).
-2. Commit & push to `main`/`master`. GitHub Actions will build and deploy.
-3. Open the GitHub Pages URL (printed in the **Deploy** job).
-
-If you see **“未找到播放列表”** on the page, make sure Actions is enabled for the repo and Pages is enabled (the workflow sets `enablement: true`).
-
-## Notes on FLAC
-Not all browsers can play FLAC in `<audio>`. This player prefers AAC/MP3 if available and will show a helpful message if only FLAC exists and the browser can’t play it.
+## Git LFS
+大文件请用 Git LFS，工作流已设置 `lfs: true`，会在构建时拉取真实文件再转码+发布。
