@@ -68,9 +68,8 @@ btnTheme?.addEventListener('click', ()=>{
 });
 
 // color modal
-btnColors?.addEventListener('click', ()=>{ modal?.style.display='flex'; });
+btnColors?.addEventListener('click', ()=>{ modal.style.display='flex'; });
 btnClose?.addEventListener('click', ()=>{
-  if(!modal) return;
   modal.style.display='none';
   const colors = {
     accent: cAccent.value,
@@ -83,13 +82,6 @@ btnClose?.addEventListener('click', ()=>{
 modal?.addEventListener('click', (e)=>{
   if(e.target===modal) modal.style.display='none';
 });
-
-
-function showMessage(msg){
-  if(listEl){
-    listEl.innerHTML = '<div class="row"><div class="t">'+msg+'</div><div></div><div></div></div>';
-  }
-}
 
 // Simple SPA music player with WebAudio visualizer
 const audio = document.getElementById('audio');
@@ -136,20 +128,19 @@ function groupByPath(tracks){
 }
 
 function pickBestSource(sources){
-  if(!Array.isArray(sources)||sources.length===0) return null;
-  // Prefer AAC/MP3 fallbacks; only use FLAC if browser supports it
+  // Prefer original if playable, then AAC, then MP3
   const can = (mime)=> audio.canPlayType(mime) !== '';
   const order = [
+    (s)=> s.mime.includes('flac') && can('audio/flac'),
     (s)=> s.mime.includes('mp4') && can('audio/mp4'),
     (s)=> s.mime.includes('mpeg') && can('audio/mpeg'),
-    (s)=> s.mime.includes('flac') && can('audio/flac'),
     (s)=> can(s.mime)
   ];
   for(const test of order){
     const found = sources.find(test);
     if(found) return found.url;
   }
-  return null;
+  return sources[0]?.url;
 }
 
 function buildList(tracks){
@@ -227,9 +218,17 @@ function buildTree(node, path=[], container=treeEl){
   }
 
   // root-level tracks
-  if(node.__list__){
+  if(node.__list__?.length){
+    const rootGroup = document.createElement('div');
+    rootGroup.className = 'group';
+    rootGroup.textContent = '/';
     const div = document.createElement('div');
     div.className = 'children';
+    let open = true;
+    rootGroup.addEventListener('click', ()=>{
+      open = !open;
+      div.style.display = open ? 'block' : 'none';
+    });
     for(const tr of node.__list__){
       const item = document.createElement('div');
       item.className = 'group item';
@@ -241,6 +240,7 @@ function buildTree(node, path=[], container=treeEl){
       });
       div.appendChild(item);
     }
+    frag.appendChild(rootGroup);
     frag.appendChild(div);
   }
 
@@ -264,16 +264,8 @@ function filterTracks(){
 
 async function load(){
   await applyConfig();
-  let data;
-  try{
-    const res = await fetch('./index.json?ts=' + Date.now());
-    if(!res.ok) throw new Error('index.json not found');
-    data = await res.json();
-  }catch(err){
-    console.error('Failed to load index.json', err);
-    showMessage('未找到播放列表。请确保仓库含有 music/ 并且 GitHub Actions 已生成 index.json');
-    return;
-  }
+  const res = await fetch('./index.json?ts=' + Date.now());
+  const data = await res.json();
   allTracks = data.tracks || [];
   filteredTracks = allTracks.slice();
   buildList(filteredTracks);
@@ -293,24 +285,15 @@ async function load(){
 }
 
 function playIndex(idx, autoplay=true){
-  queue = filteredTracks.slice();
+  queue = filteredTracks;
   currentIndex = idx;
   const tr = queue[idx];
   const url = pickBestSource(tr.sources);
-  if(!url){
-    console.warn('No playable source for', tr);
-    const hasOnlyFlac = Array.isArray(tr.sources) && tr.sources.length>0 && tr.sources.every(s=>/flac/.test(s.mime));
-    if(hasOnlyFlac && audio && audio.canPlayType('audio/flac')===''){
-      showMessage('此浏览器不支持 FLAC 播放。请在仓库启用有损转码（MP3/AAC）或使用支持 FLAC 的浏览器。');
-    }
-    return next();
-  }
-  audio.src = encodeURI(url);
-  audio.load();
+  audio.src = url;
   npTitle.textContent = tr.title || '—';
   npArtist.textContent = tr.artist || tr.album || tr.groupPath || '—';
 
-  listEl.querySelectorAll('.row').forEach((el,i)=>{
+  document.querySelectorAll('.row').forEach((el,i)=>{
     el.classList.toggle('active', i===idx);
   });
 
@@ -451,7 +434,6 @@ btnPrev.addEventListener('click', prev);
 audio.addEventListener('play', ()=>{ btnPlay.textContent='⏸'; });
 audio.addEventListener('pause', ()=>{ btnPlay.textContent='▶️'; });
 audio.addEventListener('ended', ()=> next());
-audio.addEventListener('error', ()=> next());
 
 searchEl.addEventListener('input', filterTracks);
 window.addEventListener('keydown', (e)=>{
