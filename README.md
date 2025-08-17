@@ -1,78 +1,35 @@
-# GitHub Actions Music Playlist (MP3/WAV/FLAC) + Visualizer
+# Music Player (GitHub Pages)
 
-This repo lets you **drop audio files into `music/` (with any subfolders)** and get a **beautiful player** deployed to **GitHub Pages** automatically via **GitHub Actions**. It includes:
-
-- ✅ MP3/WAV/FLAC ingestion (recursive folders become *groups*)
-- ✅ Automatic `index.json` with title/artist/album/duration via `ffprobe`
-- ✅ Optional **transcode** for better browser support: FLAC/WAV → `m4a` (AAC) + `mp3`
-- ✅ Fancy **WebAudio** visualizer (bars + radial), Media Session API, keyboard shortcuts
-- ✅ Single-page app (no refresh), mobile friendly, glassmorphism UI
-
----
-
-## Quick Start
-
-1. **Create a new GitHub repo** and upload these files.
-2. In your repo, go to **Settings → Pages** and set **Build and deployment → Source: GitHub Actions**.
-3. Commit/push. The Action will run and deploy to Pages.
-4. Put your songs inside the `music/` folder (you can create subfolders to group). Push again.
-
-> **Note about file sizes**
-> - GitHub limits individual files to **100 MB** in normal git. Larger files require **Git LFS**.  
-> - GitHub Pages bandwidth is limited; consider using the **transcoded outputs** (the workflow makes `m4a`/`mp3`) for web playback.
-
----
+This repo builds a static music player site from the `music/` folder.
 
 ## How it works
+- `scripts/build.py` scans `music/` recursively.
+- It copies originals to `dist/audio/raw/...`.
+- If `ffmpeg` is available and `publish.encodeLossless=true` in `config.json`, it transcodes WAV/FLAC to MP3 (`mp3Bitrate`) and M4A/AAC (`aacBitrate`) and prefers those when playing.
+- It writes `dist/index.json` and copies `site/*` (including `config.json`) into `dist/`, then deploys to GitHub Pages.
 
-- The workflow installs `ffmpeg` and runs `scripts/build.py`
-- `build.py` scans the `music/` directory recursively and collects metadata using `ffprobe`
-- For `wav/flac`, it generates `m4a` (AAC) and `mp3` fallbacks
-- It copies the single-page app (`site/`) into `dist/` and writes `dist/index.json`
-- GitHub Pages deploys the `dist/` folder
+## Configure
+Edit the root `config.json`:
 
----
-
-## Local test (optional)
-
-If you have Python 3 + ffmpeg installed locally:
-
-```bash
-python3 scripts/build.py
-# Builds to dist/
-# Then open dist/index.html in your browser (start a local server to avoid CORS),
-# e.g.:
-python3 -m http.server --directory dist 8080
+```json
+{
+  "publish": {
+    "originals": true,
+    "encodeLossless": true,
+    "aacBitrate": "192k",
+    "mp3Bitrate": "256k"
+  }
+}
 ```
 
----
+Customize the UI theme in `site/config.json`.
 
-## Folders
+## Usage
+1. Put your audio files into `music/` (you can nest folders to create groups).
+2. Commit & push to `main`/`master`. GitHub Actions will build and deploy.
+3. Open the GitHub Pages URL (printed in the **Deploy** job).
 
-- `music/` — **Put your audio here** (supports subfolders for grouping)
-- `scripts/build.py` — Scans audio, builds `index.json`, transcodes fallbacks
-- `site/` — Front-end player (HTML/CSS/JS), copied to `dist/`
-- `.github/workflows/build.yml` — GitHub Actions for Pages deployment
+If you see **“未找到播放列表”** on the page, make sure Actions is enabled for the repo and Pages is enabled (the workflow sets `enablement: true`).
 
----
-
-## Front-end features
-
-- Folder groups (from directory structure), search, queue, next/prev
-- Real-time visualizer (bars + radial) using WebAudio `AnalyserNode`
-- Media Session API (lock screen controls)
-- Remembers last track + position
-- Keyboard: `Space` Play/Pause, `←/→` Seek, `↑/↓` Volume, `N` Next, `P` Previous
-
----
-
-## Codec support note
-
-- Most browsers play **MP3** and **AAC** broadly. **FLAC** support varies.  
-- The player auto-chooses the **best playable** source among: original → `m4a` → `mp3`.
-
----
-
-## Customize
-
-Edit `site/style.css` and `site/app.js` for UI/visualizer tweaks.
+## Notes on FLAC
+Not all browsers can play FLAC in `<audio>`. This player prefers AAC/MP3 if available and will show a helpful message if only FLAC exists and the browser can’t play it.

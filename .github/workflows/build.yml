@@ -20,21 +20,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
       - name: Install ffmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Build site
-        run: |
-          python3 --version
-          python3 scripts/build.py
+      - name: Build static site
+        run: python3 scripts/build.py
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -51,3 +47,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          enablement: true

@@ -1,0 +1,90 @@
+*{box-sizing:border-box}
+:root{
+  --bg: #0b0f1a;
+  --fg: #e5e9f0;
+  --muted: #a3acc3;
+  --accent: #6ea8fe;
+  --glass-bg: rgba(255,255,255,0.06);
+  --glass-brd: rgba(255,255,255,0.12);
+  --viz-stop1: #9ec5ff;
+  --viz-stop2: #6ea8fe;
+  --viz-ring: #9ec5ff;
+}
+/* light theme variables */
+.theme-light{
+  --bg: #f6f7fb;
+  --fg: #0b1220;
+  --muted: #3f4a5f;
+  --accent: #3b82f6;
+  --glass-bg: rgba(255,255,255,0.7);
+  --glass-brd: rgba(0,0,0,0.08);
+  --viz-stop1: #82aaff;
+  --viz-stop2: #3b82f6;
+  --viz-ring: #82aaff;
+}
+/* dark theme variables */
+.theme-dark{
+  --bg: #0b0f1a;
+  --fg: #e5e9f0;
+  --muted: #a3acc3;
+  --accent: #6ea8fe;
+  --glass-bg: rgba(255,255,255,0.06);
+  --glass-brd: rgba(255,255,255,0.12);
+  --viz-stop1: #9ec5ff;
+  --viz-stop2: #6ea8fe;
+  --viz-ring: #9ec5ff;
+}
+@media (prefers-color-scheme: light){
+  :root{ color-scheme: light; }
+}
+@media (prefers-color-scheme: dark){
+  :root{ color-scheme: dark; }
+}
+
+:root{
+  --bg: #0b0f1a;
+  --fg: #e5e9f0;
+  --muted: #a3acc3;
+  --accent: #6ea8fe;
+  --glass-bg: rgba(255,255,255,0.06);
+  --glass-brd: rgba(255,255,255,0.12);
+}
+html,body{height:100%;margin:0;background:linear-gradient(135deg,var(--bg),#121826);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+.app{display:grid;grid-template-columns:320px 1fr;gap:16px;height:100%;padding:16px}
+.glass{background:var(--glass-bg);backdrop-filter: blur(16px);-webkit-backdrop-filter: blur(16px);border:1px solid var(--glass-brd);border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.sidebar{padding:16px;display:flex;flex-direction:column;min-height:0}
+.brand{font-weight:800;letter-spacing:.5px;margin-bottom:12px}
+.search{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--glass-brd);background:rgba(255,255,255,0.06);color:var(--fg);outline:none}
+.tree{margin-top:12px;overflow:auto}
+.tree .group{padding:8px 6px;border-bottom:1px dashed var(--glass-brd);cursor:pointer;user-select:none}
+.tree .children{padding-left:12px}
+.main{padding:16px;display:flex;flex-direction:column;min-height:0}
+.now-playing{display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.meta .title{font-weight:700;font-size:18px}
+.meta .artist{color:var(--muted);font-size:14px;margin-top:2px}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.controls .btn{border:1px solid var(--glass-brd);background:rgba(255,255,255,0.06);color:var(--fg);border-radius:12px;padding:8px 12px;cursor:pointer}
+.controls .btn-primary{background:var(--accent);color:#0b0f1a;border-color:transparent;font-weight:700}
+.controls input[type=range]{appearance:none;height:6px;border-radius:6px;background:rgba(255,255,255,0.15);outline:none}
+.controls input[type=range]::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent)}
+#viz{width:100%;height:260px;border-radius:16px;border:1px solid var(--glass-brd);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));margin-bottom:10px}
+.list-header{font-weight:700;margin:10px 0 6px}
+.list{overflow:auto;flex:1;min-height:0;border:1px solid var(--glass-brd);border-radius:14px}
+.row{display:grid;grid-template-columns:1fr 240px 90px;gap:10px;padding:10px 12px;border-bottom:1px dashed var(--glass-brd);align-items:center}
+.row .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .muted{color:var(--muted);font-size:12px}
+.row:hover{background:rgba(255,255,255,0.06);cursor:pointer}
+.active{outline:2px solid var(--accent)}
+
+@media (max-width: 920px){
+  .app{grid-template-columns:1fr}
+  .row{grid-template-columns:1fr 160px 70px}
+}
+
+.toolbar{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.swatch{width:18px;height:18px;border-radius:50%;border:1px solid var(--glass-brd);display:inline-block;margin-left:6px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:999}
+.modal .panel{background:var(--glass-bg);border:1px solid var(--glass-brd);backdrop-filter: blur(16px);padding:16px 18px;border-radius:16px;min-width:280px;color:var(--fg)}
+.modal .row{display:flex;align-items:center;justify-content:space-between;margin:8px 0}
+.modal input[type=color]{width:48px;height:28px;border:none;background:transparent}
+.toggle{border:1px solid var(--glass-brd);background:rgba(255,255,255,0.06);color:var(--fg);border-radius:12px;padding:6px 10px;cursor:pointer}
