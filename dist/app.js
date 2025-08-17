@@ -431,6 +431,9 @@ vol.addEventListener('input', ()=>{
 btnPlay.addEventListener('click', async ()=>{
   if(!ctx) ensureAudioGraph();
   if(audio.paused){
+    if(ctx && ctx.state === 'suspended'){
+      try{ await ctx.resume(); }catch(e){}
+    }
     try{ await audio.play(); }catch(e){}
     btnPlay.textContent = '⏸';
   } else {
