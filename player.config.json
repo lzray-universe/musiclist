@@ -1,7 +1,7 @@
 {
   "defaultTheme": "auto",
-  "accent": "#6ea8fe",
   "viz": {
+    "accent": "#6ea8fe",
     "bars": {
       "stop1": "#9ec5ff",
       "stop2": "#6ea8fe"

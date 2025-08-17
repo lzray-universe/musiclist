@@ -9,25 +9,44 @@ const cStop1 = document.getElementById('c-stop1');
 const cStop2 = document.getElementById('c-stop2');
 const cRing = document.getElementById('c-ring');
 
+async function getJSON(urls, defaultValue = null){
+  for(const url of urls){
+    try{
+      const res = await fetch(url, { cache: 'no-store' });
+      if(!res.ok) continue;
+      return await res.json();
+    }catch(e){}
+  }
+  return defaultValue;
+}
+
+function baseUrls(name){
+  const u = new URL(location.href);
+  const paths = [];
+  // current folder
+  paths.push(`./${name}?ts=${Date.now()}`);
+  // repo root (for nested hosts)
+  const segs = u.pathname.split('/').filter(Boolean);
+  if(segs.length >= 1){
+    const repo = '/' + segs.slice(0,1).join('/') + '/';
+    paths.push(`${repo}${name}?ts=${Date.now()}`);
+  }
+  // root without ts
+  paths.push(`./${name}`);
+  return paths;
+}
+
+
 async function applyConfig(){
   try{
-    let cfg = {};
-try {
-  const base = new URL('.', document.currentScript.src);      
-  const url  = new URL('config.json', base);
-  const res  = await fetch(url.toString() + '?ts=' + Date.now(), { cache: 'no-store' });
-  if (res.ok) cfg = await res.json();
-} catch (e) {
-
-}
+    const cfg = await getJSON(baseUrls('player.config.json').concat(baseUrls('config.json')), {});
     const themePref = localStorage.getItem('player.theme') || cfg.defaultTheme || 'auto';
     setTheme(themePref);
     const saved = JSON.parse(localStorage.getItem('player.colors')||'null');
     const colors = saved || cfg.viz || {};
     setColors(colors);
-  }catch(e){
-    setTheme('auto');
   }
+  catch(e){ setTheme('auto'); }
 }
 
 function setTheme(mode){
@@ -271,8 +290,7 @@ function filterTracks(){
 
 async function load(){
   await applyConfig();
-  const res = await fetch('./index.json?ts=' + Date.now());
-  const data = await res.json();
+  const data = await getJSON(baseUrls('index.json'), { tracks: [] });
   allTracks = data.tracks || [];
   filteredTracks = allTracks.slice();
   buildList(filteredTracks);
