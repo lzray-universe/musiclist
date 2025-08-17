@@ -218,9 +218,17 @@ function buildTree(node, path=[], container=treeEl){
   }
 
   // root-level tracks
-  if(node.__list__){
+  if(node.__list__?.length){
+    const rootGroup = document.createElement('div');
+    rootGroup.className = 'group';
+    rootGroup.textContent = '/';
     const div = document.createElement('div');
     div.className = 'children';
+    let open = true;
+    rootGroup.addEventListener('click', ()=>{
+      open = !open;
+      div.style.display = open ? 'block' : 'none';
+    });
     for(const tr of node.__list__){
       const item = document.createElement('div');
       item.className = 'group item';
@@ -232,6 +240,7 @@ function buildTree(node, path=[], container=treeEl){
       });
       div.appendChild(item);
     }
+    frag.appendChild(rootGroup);
     frag.appendChild(div);
   }
 
