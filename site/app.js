@@ -11,8 +11,15 @@ const cRing = document.getElementById('c-ring');
 
 async function applyConfig(){
   try{
-    const res = await fetch('./config.json?ts='+Date.now());
-    const cfg = await res.json();
+    let cfg = {};
+try {
+  const base = new URL('.', document.currentScript.src);      
+  const url  = new URL('config.json', base);
+  const res  = await fetch(url.toString() + '?ts=' + Date.now(), { cache: 'no-store' });
+  if (res.ok) cfg = await res.json();
+} catch (e) {
+
+}
     const themePref = localStorage.getItem('player.theme') || cfg.defaultTheme || 'auto';
     setTheme(themePref);
     const saved = JSON.parse(localStorage.getItem('player.colors')||'null');
